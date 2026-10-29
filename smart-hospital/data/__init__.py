@@ -1,0 +1,2 @@
+"""Data package (synthetic only)."""
+

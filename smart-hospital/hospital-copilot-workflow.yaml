@@ -1,0 +1,228 @@
+# Parsable YAML twin of hospital-copilot-workflow-export.json
+# Executable counterpart: backend/copilot/graph.py (LangGraph StateGraph)
+
+workflow:
+  id: smart-hospital-mvp-v1
+  name: Smart Hospital FAQ Copilot
+  version: 1.0.0
+  entrypoint: workflow-start
+  humanInTheLoop:
+    scope: narrow
+    gatedActions:
+      - discharge
+      - claim_decision_support
+      - pharmacy_dispense
+    rule: four-eyes; requester cannot approve their own request
+  stages:
+    - id: workflow-start
+      type: start
+      description: Entry point for a copilot turn.
+      on_success: staff-intake-form
+
+    - id: staff-intake-form
+      type: ui-input
+      description: Collect question, session id and authenticated role.
+      on_success: auth-rbac-gate
+
+    - id: auth-rbac-gate
+      type: auth-gate
+      description: Enforce faq:ask permission and patient data scoping.
+      on_success: input-guardrail-scan
+      on_failure: guardrail-block-end
+
+    - id: input-guardrail-scan
+      type: guardrail
+      description: Screen for prompt injection, PII, emergency phrases and length.
+      branches:
+        - condition: emergency
+          next: emergency-escalation
+        - condition: prompt_injection
+          next: guardrail-block-end
+        - condition: clinical_request
+          next: clinical-boundary-block
+        - condition: default
+          next: set-session-context
+
+    - id: clinical-boundary-block
+      type: guardrail
+      description: Refuse diagnosis, medication advice and claim approvals.
+      on_success: escalation-router
+
+    - id: emergency-escalation
+      type: preview
+      description: Return 24x7 emergency contact guidance.
+      on_success: audit-persist
+
+    - id: set-session-context
+      type: set-variable
+      description: Initialise corpus, repair counters and token budget.
+      on_success: request-validation
+
+    - id: request-validation
+      type: input-validation
+      requires: [question, session_id, role]
+      on_success: intent-router
+      on_failure: missing-fields-notice
+
+    - id: missing-fields-notice
+      type: preview
+      description: Return the required-field checklist.
+      on_success: needs-input-end
+
+    - id: intent-router
+      type: switch
+      description: Deterministic keyword routing across corpora and record lookups.
+      cases: [operational_faq, insurance_policy, clinical_information, record_lookup]
+      default: operational_faq
+      on_success: policy-resource-loader
+
+    - id: policy-resource-loader
+      type: mcp-resources
+      description: Load answer policy, approval policy and escalation matrix.
+      on_success: hospital-tool-registry
+
+    - id: hospital-tool-registry
+      type: mcp-tools
+      mode: read-only
+      tools:
+        - search_hospital_faq
+        - get_appointment_availability
+        - get_patient_appointments
+        - get_bed_availability
+        - get_invoice_summary
+        - get_claim_status
+        - validate_retrieved_evidence
+      on_success: hybrid-retrieval-loop
+
+    - id: hms-api-tool
+      type: http-tool
+      description: Authenticated read-only HMS record lookup.
+      on_success: hms-service-call
+
+    - id: hms-service-call
+      type: http-request
+      description: Call the hospital API for live KPI or record data.
+      on_success: hybrid-retrieval-loop
+
+    - id: hybrid-retrieval-loop
+      type: retrieval
+      strategy: bm25 + dense vector, reciprocal rank fusion, lexical rerank, dedupe
+      max_iterations: 2
+      on_success: evidence-sufficiency-branch
+
+    - id: evidence-sufficiency-branch
+      type: branch
+      branches:
+        - condition: evidence_insufficient
+          next: escalation-router
+        - condition: default
+          next: token-budget-check
+
+    - id: token-budget-check
+      type: budget-gate
+      description: Enforce the per-session token budget before any provider call.
+      on_success: provider-selector
+      on_failure: budget-block-end
+
+    - id: provider-selector
+      type: model
+      providerOrder: [groq, gemini]
+      capabilityValidation: [tool_calling, structured_output, streaming]
+      on_success: grounded-answer-generation
+      on_failure: escalation-router
+
+    - id: grounded-answer-generation
+      type: generation
+      description: Generate an answer citing [S<n>] markers, or abstain.
+      on_success: citation-validator
+      on_failure: escalation-router
+
+    - id: citation-validator
+      type: post-generation-check
+      checks: [marker_validity, per_sentence_support, term_overlap_threshold]
+      branches:
+        - condition: validated
+          next: answer-preview
+        - condition: needs_repair
+          next: retry-counter
+        - condition: model_abstained
+          next: escalation-router
+
+    - id: retry-counter
+      type: set-variable
+      description: Increment the repair attempt counter.
+      on_success: retry-router
+
+    - id: retry-router
+      type: switch
+      cases: [0, 1, 2]
+      default: exhausted
+      branches:
+        - condition: "0"
+          next: conservative-rewrite
+        - condition: "1"
+          next: conservative-rewrite
+        - condition: exhausted
+          next: escalation-router
+
+    - id: conservative-rewrite
+      type: generation
+      description: Keep only claims that can be cited; otherwise abstain.
+      on_success: citation-validator
+
+    - id: human-approval-task
+      type: human-review
+      description: Sign-off gate for discharge, claim decisions and dispensing.
+      on_success: audit-persist
+
+    - id: escalation-router
+      type: switch
+      source: rag/escalation_matrix.yaml
+      description: Role and topic mapped handoff with a reference number.
+      on_success: audit-persist
+
+    - id: answer-preview
+      type: preview
+      show: [answer, citations, sourcePreviews, validationReport, provider, tokenUsage]
+      on_success: feedback-capture
+
+    - id: bed-occupancy-visual
+      type: image
+      description: Bed occupancy snapshot for bed-related questions.
+      on_success: feedback-capture
+
+    - id: feedback-capture
+      type: memory-update
+      description: Persist helpful/not-helpful feedback.
+      on_success: audit-persist
+
+    - id: audit-persist
+      type: audit
+      target: audit_events
+      phi_policy: scrubbed
+      branches:
+        - condition: escalated
+          next: escalation-end
+        - condition: default
+          next: complete-end
+
+    - id: complete-end
+      type: terminal
+      description: Return the validated, cited answer.
+
+    - id: escalation-end
+      type: terminal
+      description: Return the abstention with a role-mapped contact and reference.
+
+    - id: needs-input-end
+      type: terminal
+      description: Return the required-field checklist; no answer produced.
+
+    - id: guardrail-block-end
+      type: terminal
+      description: Return a safe refusal for blocked requests.
+
+    - id: budget-block-end
+      type: terminal
+      description: Return a token-budget message.
+

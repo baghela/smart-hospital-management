@@ -1,0 +1,75 @@
+# Role-mapped escalation contacts used when FAQ evidence is insufficient
+# or when a request crosses a clinical / financial boundary.
+# Static YAML by design: no database dependency, reviewable in version control.
+
+version: "1.0"
+default:
+  desk: Hospital Help Desk
+  contact: "+91-80-4000-1000"
+  email: helpdesk@smarthospital.example
+  hours: "08:00-20:00 IST, Mon-Sat"
+
+emergency:
+  desk: Emergency Department
+  contact: "1066"
+  email: emergency@smarthospital.example
+  hours: "24x7"
+
+topics:
+  appointment:
+    desk: Appointment Desk
+    contact: "+91-80-4000-1010"
+    email: appointments@smarthospital.example
+    hours: "08:00-20:00 IST"
+  billing:
+    desk: Billing Counter
+    contact: "+91-80-4000-1020"
+    email: billing@smarthospital.example
+    hours: "09:00-18:00 IST"
+  insurance:
+    desk: Insurance & TPA Desk
+    contact: "+91-80-4000-1030"
+    email: insurance@smarthospital.example
+    hours: "09:00-17:00 IST"
+  admission:
+    desk: Admissions Office
+    contact: "+91-80-4000-1040"
+    email: admissions@smarthospital.example
+    hours: "24x7"
+  discharge:
+    desk: Discharge Coordination
+    contact: "+91-80-4000-1045"
+    email: discharge@smarthospital.example
+    hours: "08:00-20:00 IST"
+  laboratory:
+    desk: Laboratory Services
+    contact: "+91-80-4000-1050"
+    email: lab@smarthospital.example
+    hours: "07:00-21:00 IST"
+  pharmacy:
+    desk: Pharmacy Counter
+    contact: "+91-80-4000-1060"
+    email: pharmacy@smarthospital.example
+    hours: "24x7"
+  clinical:
+    desk: Nursing Station / Duty Doctor
+    contact: "+91-80-4000-1070"
+    email: clinical@smarthospital.example
+    hours: "24x7"
+  records:
+    desk: Medical Records Department
+    contact: "+91-80-4000-1080"
+    email: records@smarthospital.example
+    hours: "09:00-17:00 IST"
+
+# Role-specific routing: who the user should be handed off to, by their role.
+roles:
+  patient: default
+  receptionist: appointment
+  nurse: clinical
+  doctor: clinical
+  lab: laboratory
+  pharmacist: pharmacy
+  billing: billing
+  admin: records
+

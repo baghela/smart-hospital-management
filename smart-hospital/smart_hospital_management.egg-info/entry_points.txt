@@ -1,0 +1,3 @@
+[console_scripts]
+hospital-eval = evaluation.run_eval:main
+hospital-seed = data.seed.seed_data:seed

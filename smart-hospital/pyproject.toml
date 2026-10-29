@@ -1,0 +1,79 @@
+[project]
+name = "smart-hospital-management"
+version = "1.0.0"
+description = "Smart Hospital Management System with a LangGraph AI copilot and RAG-based hospital FAQ assistant"
+readme = "README.md"
+authors = [
+    { name = "baghela", email = "singh.amit.031992@gmail.com" }
+]
+requires-python = ">=3.11"
+
+dependencies = [
+    # --- Web / API ---------------------------------------------------
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "python-multipart>=0.0.12",
+    "httpx>=0.27.0",
+    "truststore>=0.9.0",
+    "pydantic>=2.9.0",
+
+    # --- Database (PostgreSQL first, Alembic migrations) -------------
+    "SQLAlchemy>=2.0.30",
+    "alembic>=1.13.0",
+    "psycopg[binary]>=3.2.0",
+
+    # --- UI ----------------------------------------------------------
+    "streamlit>=1.38.0",
+    "pandas>=2.2.0",
+
+    # --- AI providers / orchestration --------------------------------
+    # Groq and Gemini are called over plain HTTP (httpx) with a Bearer token.
+    "langchain>=0.3.0",
+    "langchain-core>=0.3.0",
+    "langgraph>=0.2.0",
+    "langchain-google-genai>=2.0.0",
+    "langchain-groq>=0.2.0",
+
+    # --- Document processing -----------------------------------------
+    "PyMuPDF>=1.24.0",
+    "python-docx>=1.1.0",
+
+    # --- Configuration -----------------------------------------------
+    "python-dotenv>=1.0.0",
+    "PyYAML>=6.0.0",
+]
+
+[project.optional-dependencies]
+# Higher-quality embeddings; the app falls back to a deterministic hashing
+# embedder when these are absent, so everything still runs offline.
+embeddings = ["sentence-transformers>=3.0.0"]
+# OCR fallback for scanned PDFs (also requires a local tesseract install).
+ocr = ["pytesseract>=0.3.10", "Pillow>=10.0.0"]
+dev = ["pytest>=8.3.0", "pytest-cov>=5.0.0", "ruff>=0.6.0"]
+
+[project.scripts]
+hospital-seed = "data.seed.seed_data:seed"
+hospital-eval = "evaluation.run_eval:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["backend", "rag", "streamlit_app", "evaluation", "data"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["ignore::DeprecationWarning"]
+markers = [
+    "integration: end-to-end tests touching the database and the copilot graph",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["B008"]

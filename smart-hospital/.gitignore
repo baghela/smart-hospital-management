@@ -1,0 +1,11 @@
+﻿.venv/
+__pycache__/
+*.py[cod]
+.env
+*.db
+dev_hospital.db
+.pytest_cache/
+.coverage
+htmlcov/
+evaluation/last_report.json
+.streamlit/secrets.toml

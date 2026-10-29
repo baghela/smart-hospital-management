@@ -1,0 +1,21 @@
+APPOINTMENT BOOKING AND OUTPATIENT PROCESS
+
+Booking an Appointment
+Appointments can be booked at the reception counter, by phone, or through the hospital portal.
+Each outpatient consultation slot is 30 minutes long by default.
+Patients must provide a valid photo identity document when booking for the first time.
+
+Rescheduling and Cancellation
+An appointment can be rescheduled free of charge up to 2 hours before the scheduled time.
+Cancellations made less than 2 hours before the appointment may forfeit the consultation fee.
+A cancelled slot is released immediately and becomes available to other patients.
+
+Check In and Queue
+Patients should check in at the reception counter 15 minutes before the appointment time.
+A queue number is issued at check in and is called in order of check in time.
+Patients arriving more than 20 minutes late may be asked to wait for the next free slot.
+
+Required Documents for a First Visit
+Bring a photo identity document, previous prescriptions, and any earlier test reports.
+Insurance patients should also bring the policy card and the insurer authorisation letter.
+

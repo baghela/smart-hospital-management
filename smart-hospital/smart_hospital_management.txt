@@ -1,0 +1,242 @@
+﻿Build a complete, end-to-end Smart Hospital Management System with an AI Copilot and RAG-based Hospital FAQ Assistant, using a simple, modern Streamlit UI.
+1. Technology Stack
+Frontend: Streamlit multipage application.
+Backend: Python FastAPI with modular services.
+Database: PostgreSQL; use SQLAlchemy and Alembic migrations.
+AI models: Support Google Gemini and Groq through configurable provider adapters. Use environment variables for API keys and model names. Select the provider/model through configuration or the UI.
+Optimize token usage: use the smallest suitable models, concise prompts, low-cost models for classification, deterministic Python logic for business rules, limited context, bounded chat history, deduplication, caching, and configurable output limits. Do not send entire documents to an LLM unnecessarily.
+RAG: Embeddings, Chroma or pgvector, BM25 keyword retrieval, hybrid search, optional reranking, and source citations.
+Document processing: PyMuPDF, python-docx, pandas, and OCR fallback for scanned PDFs.
+Deployment: Docker and environment-based configuration.
+2. Hospital Management Modules
+Implement functional workflows for:
+Patient registration, unique patient IDs, profiles, search, and consent.
+Doctor and department management.
+Appointment booking, rescheduling, cancellation, check-in, and queue management.
+OPD encounters and clinical documentation.
+Admission, ward management, bed allocation, transfers, and discharge.
+Laboratory orders, specimen tracking, and results.
+Prescriptions and pharmacy inventory/dispensing.
+Itemized billing, invoices, payments, refunds, and receipts.
+Insurance policies, pre-authorization, claim documents, and claim status.
+Discharge summaries and follow-up appointments.
+Admin dashboards and operational reports.
+AI hospital FAQ assistant with RAG.
+Build working CRUD operations, validations, database persistence, relationships, error handling, and transaction-safe workflows. Prevent double booking of appointments or beds.
+3. FAQ RAG Assistant
+Create a complete document ingestion and question-answering pipeline.
+Accept approved hospital FAQ documents in PDF, DOCX, CSV, TXT, and supported web-export formats.
+Extract text, preserve page numbers, detect sections, and chunk by semantic boundaries.
+Store metadata including document ID, title, category, section, page, version, approval status, and effective date.
+Generate embeddings and index documents in Chroma or pgvector.
+Implement BM25 + vector hybrid retrieval, candidate merging, optional reranking, metadata filtering, and relevance thresholds.
+Generate answers using Gemini or Groq, with citations linking to document titles, sections, and page numbers.
+Support questions about appointments, visiting hours, departments, admission, discharge, billing, insurance procedures, required documents, and approved laboratory preparation instructions.
+Include conversation history, source previews, feedback, document versioning, re-indexing, and deletion.
+If evidence is insufficient, clearly say the answer could not be verified and offer human contact or escalation. Never fabricate hospital policies.
+4. AI Copilot and Tool Calling
+Implement one orchestrator with narrowly scoped tools:
+search_hospital_faq
+get_appointment_availability
+get_patient_appointments
+get_bed_availability
+get_invoice_summary
+get_claim_status
+validate_retrieved_evidence
+Read-only tools should be available by default. Mutating operations such as booking, cancellation, dispensing, discharge, or updating patient records must use authenticated backend APIs, explicit authorization, input validation, and confirmation where appropriate.
+Use deterministic Python/backend rules for calculations, scheduling, financial operations, and eligibility checks. Do not delegate critical business rules to an LLM.
+5. Guardrails and Security
+Implement layered guardrails throughout the system:
+Authentication and role-based access control for administrators, doctors, nurses, receptionists, laboratory staff, pharmacists, billing staff, and patients.
+Enforce permissions in the backend, not merely in the UI.
+Restrict patient records to authorized users and the minimum necessary data.
+Validate and sanitize inputs, uploads, file types, file sizes, MIME types, and extracted content.
+Protect against prompt injection in user messages and uploaded documents. Treat retrieved documents as untrusted data, never as executable instructions.
+Require retrieval evidence for hospital-specific FAQ answers. Validate citations and reject unsupported claims.
+Apply output validation using Pydantic schemas where appropriate.
+Add rate limits, request timeouts, token budgets, bounded retries, provider fallback, and safe error handling.
+Never expose API keys, secrets, internal prompts, private records, or stack traces to users.
+Prevent unauthorized tool calls, SQL injection, cross-user session leakage, and cross-tenant data access.
+Keep audit trails for sensitive access and important changes without logging unnecessary PHI.
+Do not autonomously diagnose patients, prescribe or alter medication, approve insurance claims, or make clinical decisions. Require authorized human review for clinical drafts and high-impact actions.
+Provide emergency escalation messaging where appropriate.
+Use synthetic data for development and testing. Include consent, retention, deletion, encryption, and deployment-security considerations.
+Implement practical guardrails rather than relying only on system prompts. Clearly separate operational FAQ RAG from clinical information and insurance-policy RAG.
+6. Streamlit UI
+Create a polished, responsive, professional hospital dashboard with:
+Sidebar navigation and role-specific pages.
+KPI cards, tables, search, filters, forms, charts, status badges, and pagination.
+Patient and doctor directories.
+Appointment calendar/list and booking forms.
+Admission and interactive bed-availability board.
+Lab, pharmacy, billing, insurance, and discharge screens.
+FAQ chat interface with streaming where supported, source citations, expandable evidence, feedback, and clear-chat controls.
+Document upload/indexing interface restricted to authorized staff.
+Admin page for provider selection, model configuration, retrieval settings, token budgets, and audit views.
+Loading indicators, empty states, accessible controls, and useful validation messages.
+Keep the UI simple and avoid unnecessary animations or oversized components.
+7. Architecture and Code Quality
+Use a modular architecture separating:
+Streamlit presentation.
+FastAPI routes and request/response schemas.
+Authentication and authorization.
+Hospital domain models, repositories, and services.
+AI provider adapters for Gemini and Groq.
+RAG ingestion, retrieval, generation, and citation validation.
+Guardrails, audit logging, and configuration.
+Use clean interfaces so either AI provider can be switched without changing application business logic. Never hard-code model IDs or assume every model supports identical tool-calling, structured-output, or streaming features; configure and validate provider capabilities.
+Provide PostgreSQL migrations, database constraints, indexes, health checks, structured logging, and consistent error responses. Use async operations where beneficial, without adding unnecessary complexity.
+8. Testing and Evaluation
+Include unit and integration tests for:
+CRUD operations and relational integrity.
+Concurrent appointment and bed allocation.
+Authentication and role permissions.
+RAG retrieval relevance and citation accuracy.
+Unsupported questions and abstention.
+Prompt injection and malicious uploads.
+Token-budget enforcement and provider errors.
+Gemini/Groq adapter compatibility.
+Tool authorization, confirmation, and audit logging.
+Provide a small synthetic FAQ corpus and a repeatable evaluation dataset. Measure retrieval recall, answer faithfulness, citation correctness, latency, and approximate token cost.
+9. Deliverables
+Produce a complete runnable project, not just architecture diagrams or pseudocode. Include:
+Project directory structure.
+All essential source files.
+requirements.txt with compatible dependency versions.
+.env.example containing placeholder credentials only.
+Dockerfile and Docker Compose configuration.
+PostgreSQL schema and Alembic migrations.
+Synthetic seed data and sample hospital FAQs.
+README with setup, API keys, database initialization, migrations, ingestion, startup, and testing instructions.
+API documentation and example requests.
+Unit tests and integration tests.
+Example .streamlit/config.toml if needed.
+A clear list of limitations and production-hardening steps.
+Implementation Instructions
+First, create a concise architecture and implementation plan, then implement the application incrementally. Prioritize a working MVP with patient registration, appointments, admission/bed management, billing, and a functional RAG FAQ assistant before expanding other modules.
+Ensure every visible button and form performs its intended action. Do not leave placeholder screens, fake successful operations, hard-coded API responses, or TODO-only implementations. If a feature cannot be completed, explicitly identify it.
+Use maintainable code, reusable components, type hints, clear naming, and concise comments. Avoid unnecessary abstractions and excessive agent frameworks. Minimize LLM token usage without sacrificing evidence quality or safety.
+The final result must run locally by following the README, with Gemini and Groq selectable through configuration and with no real patient data required.
+Build a complete, end-to-end Smart Hospital Management System with an AI Copilot and RAG-based Hospital FAQ Assistant, using a simple, modern Streamlit UI.
+1. Technology Stack
+* Frontend: Streamlit multipage application.
+* Backend: Python FastAPI with modular services.
+* Database: PostgreSQL; use SQLAlchemy and Alembic migrations.
+* AI models: Support Google Gemini and Groq through configurable provider adapters. Use environment variables for API keys and model names. Select the provider/model through configuration or the UI.
+* Optimize token usage: use the smallest suitable models, concise prompts, low-cost models for classification, deterministic Python logic for business rules, limited context, bounded chat history, deduplication, caching, and configurable output limits. Do not send entire documents to an LLM unnecessarily.
+* RAG: Embeddings, Chroma or pgvector, BM25 keyword retrieval, hybrid search, optional reranking, and source citations.
+* Document processing: PyMuPDF, python-docx, pandas, and OCR fallback for scanned PDFs.
+* Deployment: Docker and environment-based configuration.
+2. Hospital Management Modules
+Implement functional workflows for:
+1. Patient registration, unique patient IDs, profiles, search, and consent.
+2. Doctor and department management.
+3. Appointment booking, rescheduling, cancellation, check-in, and queue management.
+4. OPD encounters and clinical documentation.
+5. Admission, ward management, bed allocation, transfers, and discharge.
+6. Laboratory orders, specimen tracking, and results.
+7. Prescriptions and pharmacy inventory/dispensing.
+8. Itemized billing, invoices, payments, refunds, and receipts.
+9. Insurance policies, pre-authorization, claim documents, and claim status.
+10. Discharge summaries and follow-up appointments.
+11. Admin dashboards and operational reports.
+12. AI hospital FAQ assistant with RAG.
+Build working CRUD operations, validations, database persistence, relationships, error handling, and transaction-safe workflows. Prevent double booking of appointments or beds.
+3. FAQ RAG Assistant
+Create a complete document ingestion and question-answering pipeline.
+* Accept approved hospital FAQ documents in PDF, DOCX, CSV, TXT, and supported web-export formats.
+* Extract text, preserve page numbers, detect sections, and chunk by semantic boundaries.
+* Store metadata including document ID, title, category, section, page, version, approval status, and effective date.
+* Generate embeddings and index documents in Chroma or pgvector.
+* Implement BM25 + vector hybrid retrieval, candidate merging, optional reranking, metadata filtering, and relevance thresholds.
+* Generate answers using Gemini or Groq, with citations linking to document titles, sections, and page numbers.
+* Support questions about appointments, visiting hours, departments, admission, discharge, billing, insurance procedures, required documents, and approved laboratory preparation instructions.
+* Include conversation history, source previews, feedback, document versioning, re-indexing, and deletion.
+* If evidence is insufficient, clearly say the answer could not be verified and offer human contact or escalation. Never fabricate hospital policies.
+4. AI Copilot and Tool Calling
+Implement one orchestrator with narrowly scoped tools:
+* search_hospital_faq
+* get_appointment_availability
+* get_patient_appointments
+* get_bed_availability
+* get_invoice_summary
+* get_claim_status
+* validate_retrieved_evidence
+Read-only tools should be available by default. Mutating operations such as booking, cancellation, dispensing, discharge, or updating patient records must use authenticated backend APIs, explicit authorization, input validation, and confirmation where appropriate.
+Use deterministic Python/backend rules for calculations, scheduling, financial operations, and eligibility checks. Do not delegate critical business rules to an LLM.
+5. Guardrails and Security
+Implement layered guardrails throughout the system:
+* Authentication and role-based access control for administrators, doctors, nurses, receptionists, laboratory staff, pharmacists, billing staff, and patients.
+* Enforce permissions in the backend, not merely in the UI.
+* Restrict patient records to authorized users and the minimum necessary data.
+* Validate and sanitize inputs, uploads, file types, file sizes, MIME types, and extracted content.
+* Protect against prompt injection in user messages and uploaded documents. Treat retrieved documents as untrusted data, never as executable instructions.
+* Require retrieval evidence for hospital-specific FAQ answers. Validate citations and reject unsupported claims.
+* Apply output validation using Pydantic schemas where appropriate.
+* Add rate limits, request timeouts, token budgets, bounded retries, provider fallback, and safe error handling.
+* Never expose API keys, secrets, internal prompts, private records, or stack traces to users.
+* Prevent unauthorized tool calls, SQL injection, cross-user session leakage, and cross-tenant data access.
+* Keep audit trails for sensitive access and important changes without logging unnecessary PHI.
+* Do not autonomously diagnose patients, prescribe or alter medication, approve insurance claims, or make clinical decisions. Require authorized human review for clinical drafts and high-impact actions.
+* Provide emergency escalation messaging where appropriate.
+* Use synthetic data for development and testing. Include consent, retention, deletion, encryption, and deployment-security considerations.
+Implement practical guardrails rather than relying only on system prompts. Clearly separate operational FAQ RAG from clinical information and insurance-policy RAG.
+6. Streamlit UI
+Create a polished, responsive, professional hospital dashboard with:
+* Sidebar navigation and role-specific pages.
+* KPI cards, tables, search, filters, forms, charts, status badges, and pagination.
+* Patient and doctor directories.
+* Appointment calendar/list and booking forms.
+* Admission and interactive bed-availability board.
+* Lab, pharmacy, billing, insurance, and discharge screens.
+* FAQ chat interface with streaming where supported, source citations, expandable evidence, feedback, and clear-chat controls.
+* Document upload/indexing interface restricted to authorized staff.
+* Admin page for provider selection, model configuration, retrieval settings, token budgets, and audit views.
+* Loading indicators, empty states, accessible controls, and useful validation messages.
+Keep the UI simple and avoid unnecessary animations or oversized components.
+7. Architecture and Code Quality
+Use a modular architecture separating:
+* Streamlit presentation.
+* FastAPI routes and request/response schemas.
+* Authentication and authorization.
+* Hospital domain models, repositories, and services.
+* AI provider adapters for Gemini and Groq.
+* RAG ingestion, retrieval, generation, and citation validation.
+* Guardrails, audit logging, and configuration.
+Use clean interfaces so either AI provider can be switched without changing application business logic. Never hard-code model IDs or assume every model supports identical tool-calling, structured-output, or streaming features; configure and validate provider capabilities.
+Provide PostgreSQL migrations, database constraints, indexes, health checks, structured logging, and consistent error responses. Use async operations where beneficial, without adding unnecessary complexity.
+8. Testing and Evaluation
+Include unit and integration tests for:
+* CRUD operations and relational integrity.
+* Concurrent appointment and bed allocation.
+* Authentication and role permissions.
+* RAG retrieval relevance and citation accuracy.
+* Unsupported questions and abstention.
+* Prompt injection and malicious uploads.
+* Token-budget enforcement and provider errors.
+* Gemini/Groq adapter compatibility.
+* Tool authorization, confirmation, and audit logging.
+Provide a small synthetic FAQ corpus and a repeatable evaluation dataset. Measure retrieval recall, answer faithfulness, citation correctness, latency, and approximate token cost.
+9. Deliverables
+Produce a complete runnable project, not just architecture diagrams or pseudocode. Include:
+1. Project directory structure.
+2. All essential source files.
+3. requirements.txt with compatible dependency versions.
+4. .env.example containing placeholder credentials only.
+5. Dockerfile and Docker Compose configuration.
+6. SQL lite schema, tables and values.
+7. Synthetic seed data and sample hospital FAQs.
+8. README with setup, API keys, database initialization, migrations, ingestion, startup, and testing instructions.
+9. API documentation and example requests.
+10. Unit tests and integration tests.
+11. Example .streamlit/config.toml if needed.
+12. A clear list of limitations and production-hardening steps.
+Implementation Instructions
+First, create a concise architecture and implementation plan, then implement the application incrementally. Prioritize a working MVP with patient registration, appointments, admission/bed management, billing, and a functional RAG FAQ assistant before expanding other modules.
+Ensure every visible button and form performs its intended action. Do not leave placeholder screens, fake successful operations, hard-coded API responses, or TODO-only implementations. If a feature cannot be completed, explicitly identify it.
+Use maintainable code, reusable components, type hints, clear naming, and concise comments. Avoid unnecessary abstractions and excessive agent frameworks. Minimize LLM token usage without sacrificing evidence quality or safety.
+Do not run locally but make sure every module method are running except the agents on local.
+
+add dependencies on projects.toml files.
+
+

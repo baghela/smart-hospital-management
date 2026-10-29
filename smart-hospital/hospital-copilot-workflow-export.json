@@ -1,0 +1,430 @@
+{
+  "workflowId": "smart-hospital-mvp-v1",
+  "name": "Smart Hospital FAQ Copilot",
+  "version": "1.0.0",
+  "entryNodeId": "workflow-start",
+  "metadata": {
+    "objective": "Guarded hospital FAQ copilot: RBAC gate, injection screening, deterministic routing, hybrid retrieval, citation validation, conservative repair, role-mapped escalation and audit persistence.",
+    "executableCounterpart": "backend/copilot/graph.py (LangGraph StateGraph with identical node names)",
+    "humanInTheLoopScope": ["discharge", "claim_decision_support", "pharmacy_dispense"],
+    "componentPaletteUsed": [
+      "Start Node",
+      "End Node",
+      "UI Node",
+      "Auth Gate",
+      "Guardrail Filter",
+      "Set Variable",
+      "If-Else",
+      "Switch",
+      "Repeat",
+      "MCP Tools",
+      "HTTP Tool",
+      "HTTP Request",
+      "Model",
+      "LLM",
+      "Custom Script",
+      "Project Tasks",
+      "Preview Node",
+      "Image 2"
+    ]
+  },
+  "nodes": [
+    {
+      "id": "workflow-start",
+      "type": "Start Node",
+      "config": {
+        "description": "Entry point for a hospital FAQ copilot turn."
+      }
+    },
+    {
+      "id": "staff-intake-form",
+      "type": "UI Node",
+      "config": {
+        "collect": ["question", "session_id", "role", "patient_scope"],
+        "label": "Hospital Assistant Intake"
+      }
+    },
+    {
+      "id": "auth-rbac-gate",
+      "type": "Auth Gate",
+      "config": {
+        "requiredPermission": "faq:ask",
+        "scopeRule": "patients may only access their own records",
+        "trueLabel": "authorised",
+        "falseLabel": "denied",
+        "note": "ADDED - permissions enforced in the backend, not in the UI."
+      }
+    },
+    {
+      "id": "input-guardrail-scan",
+      "type": "Guardrail Filter",
+      "config": {
+        "checks": ["prompt_injection", "pii_detection", "emergency_phrases", "length_limit"],
+        "onEmergency": "emergency-escalation",
+        "onInjection": "guardrail-block-end",
+        "note": "ADDED - layered guardrails before any retrieval or model call."
+      }
+    },
+    {
+      "id": "clinical-boundary-block",
+      "type": "Guardrail Filter",
+      "config": {
+        "refuse": ["diagnosis", "medication_advice", "claim_approval", "clinical_decision"],
+        "message": "Refuse and hand off to a qualified human.",
+        "note": "ADDED - the assistant never performs clinical or claim decisions."
+      }
+    },
+    {
+      "id": "set-session-context",
+      "type": "Set Variable",
+      "config": {
+        "variables": {
+          "corpus": "operational_faq",
+          "repairAttempts": 0,
+          "maxRepairAttempts": 2,
+          "evidenceConfidence": 0.0,
+          "tokenBudgetRemaining": "${SESSION_TOKEN_BUDGET}"
+        }
+      }
+    },
+    {
+      "id": "request-validation",
+      "type": "If-Else",
+      "config": {
+        "condition": "question && session_id && role",
+        "trueLabel": "valid_input",
+        "falseLabel": "missing_required_fields"
+      }
+    },
+    {
+      "id": "missing-fields-notice",
+      "type": "Preview Node",
+      "config": {
+        "template": "Missing required fields. Provide a question and an authenticated session.",
+        "status": "needs_input"
+      }
+    },
+    {
+      "id": "intent-router",
+      "type": "Switch",
+      "config": {
+        "field": "detectedIntent",
+        "cases": ["operational_faq", "insurance_policy", "clinical_information", "record_lookup"],
+        "defaultCase": "operational_faq",
+        "implementation": "deterministic keyword routing - zero model tokens"
+      }
+    },
+    {
+      "id": "policy-resource-loader",
+      "type": "MCP Tools",
+      "config": {
+        "operations": ["list_resources", "get_resource", "list_prompts", "render_prompt"],
+        "resourceTargets": ["faq_answer_policy", "approval_policy", "escalation_matrix"],
+        "promptTargets": ["grounded_answer_prompt", "conservative_repair_prompt"]
+      }
+    },
+    {
+      "id": "hospital-tool-registry",
+      "type": "MCP Tools",
+      "config": {
+        "tools": [
+          "search_hospital_faq",
+          "get_appointment_availability",
+          "get_patient_appointments",
+          "get_bed_availability",
+          "get_invoice_summary",
+          "get_claim_status",
+          "validate_retrieved_evidence"
+        ],
+        "mode": "read_only",
+        "authorizationGate": true
+      }
+    },
+    {
+      "id": "hms-api-tool",
+      "type": "HTTP Tool",
+      "config": {
+        "name": "hms_record_lookup",
+        "method": "GET",
+        "urlVariable": "hmsApiBaseUrl",
+        "auth": "bearer_session_token"
+      }
+    },
+    {
+      "id": "hms-service-call",
+      "type": "HTTP Request",
+      "config": {
+        "url": "${API_BASE_URL}/api/admin/kpis",
+        "method": "GET",
+        "timeoutSeconds": 30,
+        "retries": 2
+      }
+    },
+    {
+      "id": "hybrid-retrieval-loop",
+      "type": "Repeat",
+      "config": {
+        "maxIterations": 2,
+        "loopUntil": "evidenceConfidence >= relevanceThreshold",
+        "strategy": "BM25 + dense vector, reciprocal rank fusion, lexical rerank, dedupe",
+        "description": "Widen the corpus once when the first retrieval pass is weak."
+      }
+    },
+    {
+      "id": "evidence-sufficiency-branch",
+      "type": "If-Else",
+      "config": {
+        "condition": "evidenceConfidence >= relevanceThreshold",
+        "trueLabel": "evidence_sufficient",
+        "falseLabel": "evidence_insufficient"
+      }
+    },
+    {
+      "id": "token-budget-check",
+      "type": "Custom Script",
+      "config": {
+        "script": "enforce_session_token_budget",
+        "outputs": ["projectedTokens", "budgetRemaining"],
+        "onExceeded": "budget-block-end",
+        "note": "ADDED - token cost is bounded before any provider call."
+      }
+    },
+    {
+      "id": "provider-selector",
+      "type": "Model",
+      "config": {
+        "providerOrder": ["groq", "gemini"],
+        "capabilityValidation": ["tool_calling", "structured_output", "streaming"],
+        "temperature": 0.1,
+        "maxOutputTokens": "${MAX_OUTPUT_TOKENS}",
+        "fallback": "next configured provider in order"
+      }
+    },
+    {
+      "id": "grounded-answer-generation",
+      "type": "LLM",
+      "config": {
+        "promptId": "grounded_answer_prompt",
+        "contextPolicy": "numbered evidence block only, treated as untrusted data",
+        "outputContract": {
+          "answer": "string with [S<n>] citation markers",
+          "abstainToken": "INSUFFICIENT_EVIDENCE"
+        }
+      }
+    },
+    {
+      "id": "citation-validator",
+      "type": "Custom Script",
+      "config": {
+        "script": "validate_citations_and_grounding",
+        "checks": ["marker_validity", "per_sentence_support", "term_overlap_threshold"],
+        "outputs": ["validationStatus", "unsupportedSentences", "coverage"]
+      }
+    },
+    {
+      "id": "retry-counter",
+      "type": "Set Variable",
+      "config": {
+        "variables": {
+          "repairAttempts": "${repairAttempts + 1}"
+        }
+      }
+    },
+    {
+      "id": "retry-router",
+      "type": "Switch",
+      "config": {
+        "field": "repairAttempts",
+        "cases": [0, 1, 2],
+        "defaultCase": "exhausted"
+      }
+    },
+    {
+      "id": "conservative-rewrite",
+      "type": "LLM",
+      "config": {
+        "promptId": "conservative_repair_prompt",
+        "mode": "keep_only_citable_claims",
+        "outputContract": {
+          "answer": "string with [S<n>] citation markers",
+          "abstainToken": "INSUFFICIENT_EVIDENCE"
+        }
+      }
+    },
+    {
+      "id": "human-approval-task",
+      "type": "Project Tasks",
+      "config": {
+        "taskType": "human_review",
+        "gatedActions": ["discharge", "claim_decision_support", "pharmacy_dispense"],
+        "approverRoles": {
+          "discharge": ["doctor", "admin"],
+          "claim_decision_support": ["billing", "admin"],
+          "pharmacy_dispense": ["pharmacist", "admin"]
+        },
+        "rule": "four-eyes - the requester cannot approve their own request"
+      }
+    },
+    {
+      "id": "escalation-router",
+      "type": "Switch",
+      "config": {
+        "field": "topic",
+        "source": "rag/escalation_matrix.yaml",
+        "cases": [
+          "appointment",
+          "billing",
+          "insurance",
+          "admission",
+          "discharge",
+          "laboratory",
+          "pharmacy",
+          "clinical",
+          "records"
+        ],
+        "defaultCase": "default",
+        "note": "ADDED - role-mapped contact matrix with a handoff reference."
+      }
+    },
+    {
+      "id": "emergency-escalation",
+      "type": "Preview Node",
+      "config": {
+        "template": "Emergency guidance with the 24x7 emergency contact.",
+        "status": "emergency",
+        "note": "ADDED - emergency escalation messaging."
+      }
+    },
+    {
+      "id": "answer-preview",
+      "type": "Preview Node",
+      "config": {
+        "show": ["answer", "citations", "sourcePreviews", "validationReport", "provider", "tokenUsage"]
+      }
+    },
+    {
+      "id": "bed-occupancy-visual",
+      "type": "Image 2",
+      "config": {
+        "title": "Bed Occupancy Snapshot",
+        "source": "bed-availability-board"
+      }
+    },
+    {
+      "id": "feedback-capture",
+      "type": "Set Variable",
+      "config": {
+        "variables": {
+          "feedbackStore": "chat_feedback",
+          "metric": "helpfulRate"
+        }
+      }
+    },
+    {
+      "id": "audit-persist",
+      "type": "Custom Script",
+      "config": {
+        "script": "write_audit_event",
+        "target": "audit_events",
+        "fields": ["actor", "role", "action", "outcome", "trace_id", "provider", "tokens"],
+        "phiPolicy": "scrubbed - no unnecessary PHI is logged"
+      }
+    },
+    {
+      "id": "complete-end",
+      "type": "End Node",
+      "config": {
+        "status": "complete",
+        "operatorOutcome": "Return the validated, cited answer and persist the audit trail."
+      }
+    },
+    {
+      "id": "escalation-end",
+      "type": "End Node",
+      "config": {
+        "status": "escalated",
+        "operatorOutcome": "Return the abstention message with a role-mapped contact and reference.",
+        "note": "ADDED"
+      }
+    },
+    {
+      "id": "needs-input-end",
+      "type": "End Node",
+      "config": {
+        "status": "needs_input",
+        "operatorOutcome": "Return the required-field checklist; no answer produced."
+      }
+    },
+    {
+      "id": "guardrail-block-end",
+      "type": "End Node",
+      "config": {
+        "status": "blocked",
+        "operatorOutcome": "Return a safe refusal for injection or out-of-scope requests.",
+        "note": "ADDED"
+      }
+    },
+    {
+      "id": "budget-block-end",
+      "type": "End Node",
+      "config": {
+        "status": "budget_exceeded",
+        "operatorOutcome": "Return a budget message and suggest clearing the chat.",
+        "note": "ADDED"
+      }
+    }
+  ],
+  "edges": [
+    { "from": "workflow-start", "to": "staff-intake-form", "when": "always" },
+    { "from": "staff-intake-form", "to": "auth-rbac-gate", "when": "submitted" },
+    { "from": "auth-rbac-gate", "to": "input-guardrail-scan", "when": "authorised" },
+    { "from": "auth-rbac-gate", "to": "guardrail-block-end", "when": "denied" },
+    { "from": "input-guardrail-scan", "to": "set-session-context", "when": "clean" },
+    { "from": "input-guardrail-scan", "to": "guardrail-block-end", "when": "prompt_injection" },
+    { "from": "input-guardrail-scan", "to": "clinical-boundary-block", "when": "clinical_request" },
+    { "from": "input-guardrail-scan", "to": "emergency-escalation", "when": "emergency" },
+    { "from": "clinical-boundary-block", "to": "escalation-router", "when": "always" },
+    { "from": "emergency-escalation", "to": "audit-persist", "when": "always" },
+    { "from": "set-session-context", "to": "request-validation", "when": "always" },
+    { "from": "request-validation", "to": "intent-router", "when": "valid_input" },
+    { "from": "request-validation", "to": "missing-fields-notice", "when": "missing_required_fields" },
+    { "from": "missing-fields-notice", "to": "needs-input-end", "when": "always" },
+    { "from": "intent-router", "to": "policy-resource-loader", "when": "operational_faq" },
+    { "from": "intent-router", "to": "policy-resource-loader", "when": "insurance_policy" },
+    { "from": "intent-router", "to": "policy-resource-loader", "when": "clinical_information" },
+    { "from": "intent-router", "to": "hospital-tool-registry", "when": "record_lookup" },
+    { "from": "policy-resource-loader", "to": "hospital-tool-registry", "when": "always" },
+    { "from": "hospital-tool-registry", "to": "hms-api-tool", "when": "record_lookup_required" },
+    { "from": "hospital-tool-registry", "to": "hybrid-retrieval-loop", "when": "faq_lookup" },
+    { "from": "hms-api-tool", "to": "hms-service-call", "when": "always" },
+    { "from": "hms-service-call", "to": "hybrid-retrieval-loop", "when": "always" },
+    { "from": "hybrid-retrieval-loop", "to": "evidence-sufficiency-branch", "when": "iteration_complete" },
+    { "from": "evidence-sufficiency-branch", "to": "token-budget-check", "when": "evidence_sufficient" },
+    { "from": "evidence-sufficiency-branch", "to": "escalation-router", "when": "evidence_insufficient" },
+    { "from": "token-budget-check", "to": "provider-selector", "when": "within_budget" },
+    { "from": "token-budget-check", "to": "budget-block-end", "when": "budget_exceeded" },
+    { "from": "provider-selector", "to": "grounded-answer-generation", "when": "provider_available" },
+    { "from": "provider-selector", "to": "escalation-router", "when": "no_provider" },
+    { "from": "grounded-answer-generation", "to": "citation-validator", "when": "response_generated" },
+    { "from": "grounded-answer-generation", "to": "escalation-router", "when": "provider_error" },
+    { "from": "citation-validator", "to": "answer-preview", "when": "validated" },
+    { "from": "citation-validator", "to": "retry-counter", "when": "needs_repair" },
+    { "from": "citation-validator", "to": "escalation-router", "when": "model_abstained" },
+    { "from": "retry-counter", "to": "retry-router", "when": "always" },
+    { "from": "retry-router", "to": "conservative-rewrite", "when": "0" },
+    { "from": "retry-router", "to": "conservative-rewrite", "when": "1" },
+    { "from": "retry-router", "to": "escalation-router", "when": "2" },
+    { "from": "retry-router", "to": "escalation-router", "when": "exhausted" },
+    { "from": "conservative-rewrite", "to": "citation-validator", "when": "response_generated" },
+    { "from": "answer-preview", "to": "bed-occupancy-visual", "when": "bed_question" },
+    { "from": "answer-preview", "to": "feedback-capture", "when": "always" },
+    { "from": "bed-occupancy-visual", "to": "feedback-capture", "when": "always" },
+    { "from": "feedback-capture", "to": "human-approval-task", "when": "high_impact_action_requested" },
+    { "from": "feedback-capture", "to": "audit-persist", "when": "always" },
+    { "from": "human-approval-task", "to": "audit-persist", "when": "decision_recorded" },
+    { "from": "escalation-router", "to": "audit-persist", "when": "always" },
+    { "from": "audit-persist", "to": "complete-end", "when": "answered" },
+    { "from": "audit-persist", "to": "escalation-end", "when": "escalated" }
+  ]
+}
+
